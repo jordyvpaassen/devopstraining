@@ -1,0 +1,72 @@
+
+name: 'Workload-deployment'
+run-name: ${{ github.event.inputs.workfolder }}/Environments/${{ github.event.inputs.environment }}
+on:
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+          description: 'Terraform action'
+          required: true
+          default: 'plan'
+          type: choice
+          options:
+          - 'plan'
+          - 'apply'
+      workfolder:
+          description: 'Terraform workfolder'
+          required: true
+          type: choice
+          options:
+          - 'Caf-Enterprise-Scale'
+          - 'Workload1'
+      environment:
+          description: 'Environment'
+          required: true
+          type: choice
+          options:
+          - 'Tst'
+          - 'Dev'
+          - 'Prd'
+
+jobs:
+  infrastructure:
+    name: '${{ github.event.inputs.workfolder }}'
+    runs-on: ubuntu-latest
+    env:
+      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      TF_IN_AUTOMATION: "nonempty"
+    environment: ${{ github.event.inputs.environment }}
+
+    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
+    defaults:
+      run:
+        shell: bash
+        # Set working directory to the right Terraform workfolder and environment based on user input 
+        working-directory: Workloads/${{ github.event.inputs.workfolder }}/Environments/${{ github.event.inputs.environment }}
+
+    steps:
+    # Checkout the repository to the GitHub Actions runner
+    - name: Checkout
+      uses: actions/checkout@v3
+
+
+    # Install the latest version of Terraform CLI.
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+
+    # Run Terraform init and plan
+    - name: Terraform Init and Plan
+      run: |
+        backend_file="backend.cfg"
+        terraform init -backend-config $backend_file
+        terraform plan
+
+    # Run Terraform apply only if the apply is specified as a Terraform action
+    - if: github.event.inputs.terraform_action == 'apply'
+      name: Terraform Apply
+      run: |
+        backend_file="backend.cfg"
+        terraform apply -auto-approve
